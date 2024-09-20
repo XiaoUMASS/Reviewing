@@ -1,8 +1,8 @@
 package com.hmdp.service.impl;
 
-import com.hmdp.entity.ShopType;
-import com.hmdp.mapper.ShopTypeMapper;
-import com.hmdp.service.IShopTypeService;
+import com.hmdp.entity.Follow;
+import com.hmdp.mapper.FollowMapper;
+import com.hmdp.service.IFollowService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +15,6 @@ import org.springframework.stereotype.Service;
  * @since 2021-12-22
  */
 @Service
-public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> implements IShopTypeService {
+public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> implements IFollowService {
 
 }
