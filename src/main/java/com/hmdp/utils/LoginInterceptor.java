@@ -1,28 +1,72 @@
 package com.hmdp.utils;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
+import io.netty.util.internal.StringUtil;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.hmdp.utils.RedisConstants.LOGIN_USER_KEY;
+
 public class LoginInterceptor implements HandlerInterceptor {
+
+    private StringRedisTemplate redisTemplate;//key field value都是String存储
+
+    public LoginInterceptor(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    //    @Override
+//    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+//        //获取session
+//        HttpSession session = request.getSession();
+//        //获取session中的用户
+//        UserDTO user = (UserDTO) session.getAttribute("user");
+//        //判断用户是否存在
+//        if(user == null){
+//            //不存在，拦截（session携带的信息是无效的）
+//            response.setStatus(401);
+//            return false;
+//        }
+//        //存在，保存到 ThreadLocal
+//        UserHolder.saveUser(user);
+//        //放行
+//        return true;
+//    }
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        //获取session
-        HttpSession session = request.getSession();
-        //获取session中的用户
-        User user = (User) session.getAttribute("user");
-        //判断用户是否存在
-        if(user == null){
-            //不存在，拦截（session携带的信息是无效的）
+        //获取请求头中的token
+        String token = request.getHeader("Authorization");
+        //根据token获取reids中的用户
+        if (StringUtil.isNullOrEmpty(token)) {
             response.setStatus(401);
             return false;
         }
+        //基于token获取redis中的用户
+        Map<Object, Object> userDTOMap = redisTemplate.opsForHash().entries(LOGIN_USER_KEY + token);
+        //判断用户是否存在
+        if (userDTOMap.isEmpty()) {
+            //不存在，拦截（请求体携带的信息是无效的）
+            response.setStatus(401);
+            return false;
+        }
+        UserDTO userDTO = new UserDTO();
+        //将查询到的hash数据转为UserDTO对象
+        BeanUtil.fillBeanWithMap(userDTOMap,userDTO,false);
         //存在，保存到 ThreadLocal
-        UserHolder.saveUser(user);
+        UserHolder.saveUser(userDTO);
+        //刷新token有效期
+        redisTemplate.expire(LOGIN_USER_KEY + token,RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
         //放行
         return true;
     }
