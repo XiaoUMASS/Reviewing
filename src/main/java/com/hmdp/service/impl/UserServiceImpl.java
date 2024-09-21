@@ -49,8 +49,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String code = RandomUtil.randomNumbers(6);
         //4.保存验证码到redis
         //设置键值对的有效期
-//        redisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
-        redisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code);
+        redisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
+//        redisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code);
         //5.发送验证码
         log.info("发送短信验证码成功:" + code);
         //返回ok
@@ -127,7 +127,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         redisTemplate.expire(LOGIN_USER_KEY + token, LOGIN_USER_TTL, TimeUnit.MINUTES);
         //返回token
         log.info("返回token");
-        return Result.ok();
+        return Result.ok(token);
     }
 
     private User creatUserWithPhone(String phone) {
