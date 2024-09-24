@@ -10,6 +10,7 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisData;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,17 +31,26 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
     @Autowired
-    public IShopService shopService;
+    private IShopService shopService;
+
+    @Autowired
+    private CacheClient cacheClient;
 
     @Override
     public Result queryById(Long id) {
         //缓存穿透
 //        Shop shop = queryWithPassThrough(id);
+//        Shop shop = cacheClient.queryWithPassThrough(RedisConstants.CACHE_SHOP_KEY, id,
+//                Shop.class, this::getById, RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
         //互斥锁解决缓存击穿的方案
 //        Shop shop = queryWithMutex(id);
         //逻辑过期解决缓存击穿的方案
-        Shop shop = queryWithLogicalExpiration(id);
-        if(shop == null){
+//        Shop shop = queryWithLogicalExpiration(id);
+//        Shop shop = cacheClient.queryWithLogicalExpiration(RedisConstants.CACHE_SHOP_KEY, id,
+//                Shop.class, this::getById, RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        Shop shop = cacheClient.queryWithLogicalExpiration(RedisConstants.CACHE_SHOP_KEY, id,
+                Shop.class, this::getById, 20L, TimeUnit.SECONDS);
+        if (shop == null) {
             return Result.fail("店铺不存在");
         }
         //将查到的数据返回
@@ -125,7 +135,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         try {
             boolean isLock = tryLock(lockKey);
             //判断是否获取成功
-            if(isLock){
+            if (isLock) {
                 //再次检测redis缓存是否存在，如果存在（之前的数据库修改操作已经完成）则无需重建缓存
                 shopJSON = stringRedisTemplate.opsForValue()
                         .get(RedisConstants.CACHE_SHOP_KEY + id);
@@ -139,7 +149,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                 }
             }
             //失败，则休眠并重试
-            else{
+            else {
                 Thread.sleep(50);
                 return queryWithMutex(id);
             }
@@ -181,7 +191,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         //封装
         RedisData redisData = new RedisData(LocalDateTime.now().plusSeconds(expireSeconds), shop);
         //写入redis
-        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY+id, JSONUtil.toJsonStr(redisData));
+        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY + id, JSONUtil.toJsonStr(redisData));
     }
 
     public Shop queryWithLogicalExpiration(Long id) {
@@ -200,7 +210,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         Shop shop = JSONUtil.toBean(shopJSON, Shop.class);
         LocalDateTime expireTime = redisData.getExpireTime();
         //判断是否逻辑过期
-        if(expireTime.isAfter(LocalDateTime.now())){
+        if (expireTime.isAfter(LocalDateTime.now())) {
             //未过期，直接返回
             return shop;
         }
@@ -210,7 +220,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         //判断是否获取锁成功
         boolean isLock = tryLock(lockKey);
         //成功，开启独立线程，实现缓存重建
-        if(isLock){
+        if (isLock) {
             //再次检测redis缓存是否过期
             redisDataJSON = stringRedisTemplate.opsForValue()
                     .get(RedisConstants.CACHE_SHOP_KEY + id);
@@ -225,7 +235,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             shop = JSONUtil.toBean(shopJSON, Shop.class);
             expireTime = redisData.getExpireTime();
             //判断是否逻辑过期
-            if(expireTime.isAfter(LocalDateTime.now())){
+            if (expireTime.isAfter(LocalDateTime.now())) {
                 //未过期，直接返回
                 return shop;
             }
